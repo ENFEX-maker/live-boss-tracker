@@ -122,6 +122,129 @@ POLL_INTERVAL    = 0.5    # Sekunden
 FINALIZE_AFTER   = 8.0    # Sekunden Stille nach letztem TrySpawn → Ergebnis
 NO_BOSS_TIMEOUT  = 90.0   # Sekunden ohne TrySpawn nach Raid-Start → kein Boss
 
+# ── Wahrscheinlichkeitstabelle ────────────────────────────────────────────────
+# Quellen: tarkov.dev API + empirische Kalibrierung aus echten Raids
+# Format: (map, adj_n, supports) → [(pct_str, beschreibung, is_goon_alarm)]
+# "~" = Schätzung  |  kein "~" = aus Logs bestätigt
+_PROB: dict = {
+    # ── ALLE GOON-MAPS (allgemein) ──────────────────────────────────────────
+    # Smuggler 100%, Größe 2 (50%) oder 3 (50%), Goons ~30%
+    (None, 2, 0): [
+        ("~100%", "Smuggler (2er-Gruppe, Leader+1 Escort)", False),
+    ],
+    (None, 3, 0): [
+        ("~70%",  "Smuggler (3er-Gruppe)", False),
+        ("~30%",  "GOONS (3) + Smuggler (2er)",            True),
+    ],
+    (None, 5, 0): [
+        ("~70%",  "GOONS (3) + Smuggler (2er-Gruppe)",     True),
+        ("~30%",  "Andere 5er-Kombi ohne Wachen",          False),
+    ],
+    (None, 6, 0): [
+        ("~85%",  "GOONS (3) + Smuggler (3er-Gruppe)",     True),
+        ("~15%",  "2x Smuggler-Gruppen (beide Spawn-Zonen)", False),
+    ],
+
+    # ── CUSTOMS spezifisch ──────────────────────────────────────────────────
+    # Zusatz: Partizan 20%, Reshala ~35% (geschätzt), Goons 30%
+    ("customs", 2, 0): [
+        ("~100%", "Smuggler (2er-Gruppe)", False),
+    ],
+    ("customs", 3, 0): [
+        # Auf Customs: Goons+Smuggler(2)=n=5, daher n=3 = NUR Smuggler(3)
+        ("~100%", "Smuggler (3er-Gruppe) allein  (kein Goon-Alarm)", False),
+    ],
+    ("customs", 3, 1): [
+        ("100%",  "Partizan + Smuggler (2er)  ← aus Logs bestaetigt", False),
+    ],
+    ("customs", 4, 1): [
+        ("~80%",  "Partizan + Smuggler (3er)", False),
+        ("~20%",  "Andere Kombi mit 1 Guard", False),
+    ],
+    ("customs", 5, 0): [
+        ("~75%",  "GOONS (3) + Smuggler (2er)",            True),
+        ("~25%",  "Reshala-Partial oder andere Kombi",     False),
+    ],
+    ("customs", 5, 4): [
+        ("100%",  "RESHALA (1 Boss + 4 Guards)  ← bestaetigt", False),
+    ],
+    ("customs", 6, 0): [
+        ("~65%",  "GOONS (3) + Smuggler (3er)",            True),
+        ("~35%",  "2x Smuggler-Gruppen (Construction + Warehouse)", False),
+    ],
+    ("customs", 7, 4): [
+        ("~95%",  "GOONS (3) + RESHALA (1+4G)",            True),
+    ],
+    ("customs", 8, 4): [
+        ("~90%",  "GOONS (3) + RESHALA (1+4G) + Smuggler", True),
+    ],
+
+    # ── SHORELINE spezifisch ────────────────────────────────────────────────
+    # bg=2 (2x AF immer), Smuggler 100%, Sanitar ~40%, Goons ~30%
+    ("shoreline", 2, 0): [
+        ("~80%",  "Smuggler (2er-Gruppe)", False),
+        ("~20%",  "Sanitar-Partial oder andere Kombi", False),
+    ],
+    ("shoreline", 3, 0): [
+        ("~70%",  "Smuggler (3er-Gruppe)", False),
+        ("~30%",  "GOONS (3) + Smuggler (2er)",            True),
+    ],
+    ("shoreline", 4, 3): [
+        ("~90%",  "Sanitar (1 Boss + 3 Guards)", False),
+    ],
+    ("shoreline", 5, 0): [
+        ("~65%",  "GOONS (3) + Smuggler (2er)",            True),
+        ("~35%",  "Smuggler(3) + 2 unbekannte Spawns",    False),
+    ],
+    ("shoreline", 6, 0): [
+        ("100%",  "GOONS (3) + Smuggler (3er)  ← bestaetigt", True),
+    ],
+    ("shoreline", 7, 3): [
+        ("~90%",  "GOONS (3) + Sanitar (1+3G)",            True),
+    ],
+
+    # ── LIGHTHOUSE spezifisch ───────────────────────────────────────────────
+    # Smuggler 100%, Zryachiy ~%, Goons ~30%
+    ("lighthouse", 3, 0): [
+        ("~70%",  "Smuggler (3er-Gruppe)", False),
+        ("~30%",  "GOONS (3) + Smuggler (2er)",            True),
+    ],
+    ("lighthouse", 5, 0): [
+        ("~65%",  "GOONS (3) + Smuggler (2er)",            True),
+        ("~35%",  "Zryachiy (2) + andere Kombi",          False),
+    ],
+    ("lighthouse", 6, 0): [
+        ("~80%",  "GOONS (3) + Smuggler (3er)",            True),
+        ("~20%",  "Andere 6er-Kombi",                     False),
+    ],
+
+    # ── WOODS spezifisch ────────────────────────────────────────────────────
+    # Smuggler 100%, Shturman ~%, Goons ~30%
+    ("woods", 3, 0): [
+        ("~70%",  "Smuggler (3er-Gruppe)", False),
+        ("~30%",  "GOONS (3) + Smuggler (2er)",            True),
+    ],
+    ("woods", 5, 0): [
+        ("~65%",  "GOONS (3) + Smuggler (2er)",            True),
+        ("~35%",  "Shturman + Guards oder andere Kombi",  False),
+    ],
+    ("woods", 6, 0): [
+        ("~80%",  "GOONS (3) + Smuggler (3er)",            True),
+        ("~20%",  "Shturman + Guards + Smuggler?",        False),
+    ],
+}
+
+
+def get_prob_lines(map_name: str, n: int, s: int) -> List[tuple]:
+    """Gibt [(pct_str, beschreibung, is_goon)] zurück, map-spezifisch vor allgemein."""
+    specific = _PROB.get((map_name, n, s))
+    if specific:
+        return specific
+    generic = _PROB.get((None, n, s))
+    if generic:
+        return generic
+    return []
+
 EFT_LOGS_CANDIDATES = [
     Path("C:/Program Files (x86)/Steam/steamapps/common/Escape from Tarkov/build/Logs"),
     Path("C:/Battlestate Games/EFT (live)/build/Logs"),
@@ -230,7 +353,10 @@ class GoonTracker:
         if self.state in ("LOADING", "SPAWNING", "RESULT"):
             if RE_RAID_END.search(line):
                 if "StartLoadHideoutBundles" in line or "application quit" in line:
-                    self._log("◄ Raid beendet – Reset.")
+                    if self.state in ("LOADING", "SPAWNING"):
+                        self._log("◄ Raid abgebrochen – zurück ins Hauptmenü. Tool wartet ...")
+                    else:
+                        self._log("◄ Raid beendet – Tool wartet auf nächsten Start ...")
                     self.reset()
                     return
 
@@ -326,6 +452,8 @@ class GoonTracker:
             bg_note = f"({raw_n} gesamt − {bg} Karten-Fixspawns = {n} Boss-Spawns)"
         else:
             bg_note = ""
+
+        prob_lines = get_prob_lines(self.map_name or "", n, s)
 
         print()
         print(f"╔{sep}╗")
@@ -511,6 +639,14 @@ class GoonTracker:
             if bg_note:
                 print(row(f"  {bg_note}"))
             print(row(f"  {sup_line}"))
+
+        # Wahrscheinlichkeiten
+        if prob_lines:
+            print(f"╠{sep}╣")
+            print(row("  Wahrscheinlichkeiten:"))
+            for pct, desc, is_goon in prob_lines:
+                alarm = " ◄ GOON-ALARM" if is_goon else ""
+                print(row(f"    {pct:<6}  {desc}{alarm}"))
 
         print(f"╚{sep}╝")
         print()
