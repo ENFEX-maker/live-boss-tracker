@@ -1,0 +1,31 @@
+name: Build & Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Python einrichten
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Abhaengigkeiten installieren
+        run: pip install pyinstaller
+
+      - name: EXE bauen
+        run: python -m PyInstaller --onefile --console --name "GoonTracker" goon_tracker.py
+
+      - name: Release erstellen und EXE hochladen
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/GoonTracker.exe
+          generate_release_notes: true
