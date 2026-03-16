@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-EFT Live Goon Tracker v4.3
+EFT Live Goon Tracker v4.4
 Kalibriert auf EFT v1.0.2.5.43579 — nur Player.log.
 
 ERKENNUNGSLOGIK:
@@ -50,7 +50,7 @@ try:
 except ImportError:
     HAS_SOUND = False
 
-VERSION       = "4.3"
+VERSION       = "4.4"
 GITHUB_REPO   = "ENFEX-maker/live-boss-tracker"
 GITHUB_API    = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
@@ -977,7 +977,7 @@ def print_header(player_log: Path):
         return ("..." + s[-(W - 11):]) if len(s) > W - 8 else s
 
     print(f"╔{sep}╗")
-    print(row("EFT  LIVE  GOON  TRACKER   v4.3"))
+    print(row("EFT  LIVE  GOON  TRACKER   v4.4"))
     print(row("Knight · Big Pipe · Birdeye  –  PvE Edition"))
     print(f"╠{sep}╣")
     print(row(f"Log:  {shorten(player_log)}"))
@@ -991,7 +991,7 @@ def print_header(player_log: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="EFT Live Goon Tracker v4.3")
+    parser = argparse.ArgumentParser(description="EFT Live Goon Tracker v4.4")
     parser.add_argument("--debug", action="store_true",
                         help="Zeigt erkannte Signale in Echtzeit")
     parser.add_argument("--full",  action="store_true",
@@ -1078,3 +1078,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
+
