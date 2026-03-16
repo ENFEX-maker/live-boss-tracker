@@ -1,0 +1,8 @@
+build/
+dist/
+*.spec
+__pycache__/
+*.pyc
+.claude/
+_gt_updater.bat
+GoonTracker_update.exe
