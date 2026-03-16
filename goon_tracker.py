@@ -157,6 +157,11 @@ _PROB: dict = {
     ("customs", 3, 1): [
         ("100%",  "Partizan + Smuggler (2er)  ← aus Logs bestaetigt", False),
     ],
+    ("customs", 4, 0): [
+        ("~70%",  "Smuggler (3er) + Partizan (solo, kein Support)", False),
+        ("~20%",  "Smuggler (2er) + Goons (2?)  oder andere Kombi", False),
+        ("~10%",  "Reshala mit weniger Guards als normal", False),
+    ],
     ("customs", 4, 1): [
         ("~80%",  "Partizan + Smuggler (3er)", False),
         ("~20%",  "Andere Kombi mit 1 Guard", False),
@@ -291,6 +296,7 @@ RE_RAID_END      = re.compile(
 MAP_NORM = {
     "shoreline":     "shoreline",
     "bigmap":        "customs",
+    "custom":        "customs",   # Acoustics\custom_* → base = "custom"
     "customs":       "customs",
     "woods":         "woods",
     "lighthouse":    "lighthouse",
@@ -537,21 +543,25 @@ class GoonTracker:
         elif n == 4:
             leaders = n - s
             if s == 0:
-                print(row("ℹ   4 BOSS-SPAWNS  –  Boss + 3 Wachen"))
+                boss_hint = {
+                    "customs":    "Smuggler (3er) + Partizan  oder  Reshala-Variante",
+                    "shoreline":  "Sanitar (1+3G)  oder  Smuggler(2) + weitere",
+                    "woods":      "Shturman + Guards  oder  Smuggler-Kombi",
+                    "reserve":    "Gluhar oder Boss + 3 Guards",
+                    "streets":    "Boss + 3 Guards",
+                    "groundzero": "Boss + 3 Guards",
+                }.get(self.map_name or "", "Boss + 3 Wachen  oder  Smuggler-Kombi")
+                print(row(f"ℹ   4 BOSS-SPAWNS  –  {boss_hint}"))
             else:
-                print(row(f"ℹ   4 BOSS-SPAWNS  –  {leaders} Leader + {s} Wachen (bestätigt)"))
+                boss_hint = {
+                    "shoreline":  "Sanitar (1 Boss + 3 Guards)  ← Wachen bestaetigt",
+                    "customs":    "Reshala oder Boss + Guards  ← Wachen bestaetigt",
+                    "woods":      "Shturman + Guards  ← Wachen bestaetigt",
+                }.get(self.map_name or "", f"{leaders} Leader + {s} Guards  ← bestaetigt")
+                print(row(f"ℹ   4 BOSS-SPAWNS  –  {boss_hint}"))
             print(f"╠{sep}╣")
             if bg_note:
                 print(row(f"  {bg_note}"))
-            boss_hint = {
-                "shoreline":   "Sanitar (Pharmazeutik-Lager / Sanatorium)",
-                "customs":     "Reshala (Benzin / Schlüssel-Villa)",
-                "woods":       "Shturman (Sägewerk)",
-                "reserve":     "Gluhar (Bahnhof)",
-                "streets":     "Boss (Streets of Tarkov)",
-                "groundzero":  "Boss (Ground Zero)",
-            }.get(self.map_name or "", "Boss + 3 Wachen")
-            print(row(f"  Wahrscheinlich: {boss_hint}"))
             print(row(f"  {sup_line}"))
             self._play_other()
 
