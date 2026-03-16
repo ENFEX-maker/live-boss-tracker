@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-EFT Live Goon Tracker v4.2
+EFT Live Goon Tracker v4.3
 Kalibriert auf EFT v1.0.2.5.43579 — nur Player.log.
 
 ERKENNUNGSLOGIK:
@@ -50,7 +50,7 @@ try:
 except ImportError:
     HAS_SOUND = False
 
-VERSION       = "4.2"
+VERSION       = "4.3"
 GITHUB_REPO   = "ENFEX-maker/live-boss-tracker"
 GITHUB_API    = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
 
@@ -128,7 +128,7 @@ NO_BOSS_TIMEOUT  = 90.0   # Sekunden ohne TrySpawn nach Raid-Start → kein Boss
 # "~" = Schätzung  |  kein "~" = aus Logs bestätigt
 _PROB: dict = {
     # ── ALLE GOON-MAPS (allgemein) ──────────────────────────────────────────
-    # Smuggler 100%, Größe 2 (50%) oder 3 (50%), Goons ~30%
+    # Smuggler 100% (2er 50% / 3er 50%), Goons ~25%, Event alle 100%
     (None, 2, 0): [
         ("~100%", "Smuggler (2er-Gruppe, Leader+1 Escort)", False),
     ],
@@ -138,111 +138,246 @@ _PROB: dict = {
     ],
     (None, 5, 0): [
         ("~70%",  "GOONS (3) + Smuggler (2er-Gruppe)",     True),
-        ("~30%",  "Andere 5er-Kombi ohne Wachen",          False),
+        ("~30%",  "Andere 5er-Kombi ohne Guard-Struktur",  False),
     ],
     (None, 6, 0): [
         ("~85%",  "GOONS (3) + Smuggler (3er-Gruppe)",     True),
         ("~15%",  "2x Smuggler-Gruppen (beide Spawn-Zonen)", False),
     ],
 
-    # ── CUSTOMS spezifisch ──────────────────────────────────────────────────
-    # Zusatz: Partizan 20%, Reshala ~35% (geschätzt), Goons 30%
+    # ── CUSTOMS ─────────────────────────────────────────────────────────────
+    # Reshala(1+4G=5T/4S), Partizan(solo=1T/0S), Goons(3T/0S), Smuggler(2-3T/0S)
     ("customs", 2, 0): [
         ("~100%", "Smuggler (2er-Gruppe)", False),
     ],
     ("customs", 3, 0): [
-        # Auf Customs: Goons+Smuggler(2)=n=5, daher n=3 = NUR Smuggler(3)
-        ("~100%", "Smuggler (3er-Gruppe) allein  (kein Goon-Alarm)", False),
+        ("~100%", "Smuggler (3er-Gruppe)  — kein Goon-Alarm", False),
+        # Begruendung: Goons+Smuggler(2) = n=5, nicht n=3
     ],
     ("customs", 3, 1): [
         ("100%",  "Partizan + Smuggler (2er)  ← aus Logs bestaetigt", False),
     ],
     ("customs", 4, 0): [
-        # S=0 → 4 unabhaengige Leader, keine Guards → kein Reshala moeglich
         ("~65%",  "Smuggler (3er) + Partizan (4 indep. Entities)", False),
         ("~30%",  "GOONS (3) + Partizan (4 indep. Entities)",      True),
         ("~5%",   "Andere 4er-Kombi ohne Guard-Struktur",          False),
     ],
     ("customs", 4, 1): [
-        # S=1 → 3 Leader + 1 Guard
         ("~75%",  "Smuggler (3er) + Partizan (1 Guard-Marker)",    False),
         ("~25%",  "Andere Kombi mit 1 Guard",                      False),
     ],
     ("customs", 4, 3): [
-        # S=3 → 1 Leader + 3 Guards → unbekannter Guard-Boss auf Customs
-        ("~80%",  "Boss + 3 Guards (kein Reshala – der hat 4)",    False),
+        ("~80%",  "Boss + 3 Guards  (kein Reshala — der hat 4!)",  False),
         ("~20%",  "Andere 1-Leader-3-Guard Kombi",                 False),
     ],
     ("customs", 5, 0): [
-        ("~75%",  "GOONS (3) + Smuggler (2er)",            True),
-        ("~25%",  "Reshala-Partial oder andere Kombi",     False),
+        ("~75%",  "GOONS (3) + Smuggler (2er)",                    True),
+        ("~25%",  "Andere 5er-Kombi ohne Guards",                  False),
     ],
     ("customs", 5, 4): [
-        ("100%",  "RESHALA (1 Boss + 4 Guards)  ← bestaetigt", False),
+        ("100%",  "RESHALA (1 Boss + 4 Guards)  ← aus Logs bestaetigt", False),
     ],
     ("customs", 6, 0): [
-        ("~65%",  "GOONS (3) + Smuggler (3er)",            True),
+        ("~65%",  "GOONS (3) + Smuggler (3er)",                    True),
         ("~35%",  "2x Smuggler-Gruppen (Construction + Warehouse)", False),
     ],
     ("customs", 7, 4): [
-        ("~95%",  "GOONS (3) + RESHALA (1+4G)",            True),
+        ("~95%",  "GOONS (3) + RESHALA (1+4G)",                    True),
     ],
     ("customs", 8, 4): [
-        ("~90%",  "GOONS (3) + RESHALA (1+4G) + Smuggler", True),
+        ("~90%",  "GOONS (3) + RESHALA (1+4G) + Smuggler",        True),
     ],
 
-    # ── SHORELINE spezifisch ────────────────────────────────────────────────
-    # bg=2 (2x AF immer), Smuggler 100%, Sanitar ~40%, Goons ~30%
+    # ── SHORELINE ───────────────────────────────────────────────────────────
+    # bg=2 (2x AF immer), Smuggler 100%, Sanitar(1+2G=3T/2S) ~30-100%, Goons ~25%
     ("shoreline", 2, 0): [
         ("~80%",  "Smuggler (2er-Gruppe)", False),
-        ("~20%",  "Sanitar-Partial oder andere Kombi", False),
+        ("~20%",  "Unbekannte 2er-Kombi", False),
     ],
     ("shoreline", 3, 0): [
         ("~70%",  "Smuggler (3er-Gruppe)", False),
-        ("~30%",  "GOONS (3) + Smuggler (2er)",            True),
+        ("~30%",  "GOONS (3) + Smuggler (2er)",                    True),
     ],
-    ("shoreline", 4, 3): [
-        ("~90%",  "Sanitar (1 Boss + 3 Guards)", False),
+    ("shoreline", 3, 2): [
+        ("~90%",  "Sanitar (1 Boss + 2 Guards = 3 Entities)",     False),
+        ("~10%",  "Andere 1-Leader-2-Guard Kombi",                 False),
     ],
     ("shoreline", 5, 0): [
-        ("~65%",  "GOONS (3) + Smuggler (2er)",            True),
-        ("~35%",  "Smuggler(3) + 2 unbekannte Spawns",    False),
+        ("~65%",  "GOONS (3) + Smuggler (2er)",                    True),
+        ("~35%",  "Andere 5er-Kombi",                              False),
+    ],
+    ("shoreline", 5, 2): [
+        ("~75%",  "Sanitar (3) + Smuggler (2er)",                  False),
+        ("~25%",  "Andere 1-Leader-2-Guard + 2er Kombi",           False),
     ],
     ("shoreline", 6, 0): [
-        ("100%",  "GOONS (3) + Smuggler (3er)  ← bestaetigt", True),
+        ("100%",  "GOONS (3) + Smuggler (3er)  ← aus Logs bestaetigt", True),
     ],
-    ("shoreline", 7, 3): [
-        ("~90%",  "GOONS (3) + Sanitar (1+3G)",            True),
+    ("shoreline", 6, 2): [
+        ("~85%",  "Sanitar (3) + Smuggler (3er)",                  False),
+        ("~15%",  "Andere Guard-Kombi",                            False),
     ],
-
-    # ── LIGHTHOUSE spezifisch ───────────────────────────────────────────────
-    # Smuggler 100%, Zryachiy ~%, Goons ~30%
-    ("lighthouse", 3, 0): [
-        ("~70%",  "Smuggler (3er-Gruppe)", False),
-        ("~30%",  "GOONS (3) + Smuggler (2er)",            True),
+    ("shoreline", 7, 0): [
+        ("~80%",  "GOONS (3) + Smuggler (3er) + 1 weiterer",       True),
+        ("~20%",  "Andere 7er-Kombi ohne Guards",                  False),
     ],
-    ("lighthouse", 5, 0): [
-        ("~65%",  "GOONS (3) + Smuggler (2er)",            True),
-        ("~35%",  "Zryachiy (2) + andere Kombi",          False),
+    ("shoreline", 8, 2): [
+        ("~85%",  "GOONS (3) + Sanitar (3) + Smuggler (2er)",      True),
+        ("~15%",  "Andere Kombi",                                  False),
     ],
-    ("lighthouse", 6, 0): [
-        ("~80%",  "GOONS (3) + Smuggler (3er)",            True),
-        ("~20%",  "Andere 6er-Kombi",                     False),
+    ("shoreline", 9, 2): [
+        ("~90%",  "GOONS (3) + Sanitar (3) + Smuggler (3er)",      True),
     ],
 
-    # ── WOODS spezifisch ────────────────────────────────────────────────────
-    # Smuggler 100%, Shturman ~%, Goons ~30%
+    # ── WOODS ───────────────────────────────────────────────────────────────
+    # Shturman(1+2G=3T/2S, Svetloozerskiy-Brüder — verifiziert), Goons ~15%, Smuggler 100%
+    ("woods", 2, 0): [
+        ("~100%", "Smuggler (2er-Gruppe)", False),
+    ],
     ("woods", 3, 0): [
         ("~70%",  "Smuggler (3er-Gruppe)", False),
-        ("~30%",  "GOONS (3) + Smuggler (2er)",            True),
+        ("~30%",  "GOONS (3) + Smuggler (2er)",                    True),
+    ],
+    ("woods", 3, 2): [
+        ("~90%",  "Shturman (1 Boss + 2 Guards = Svetloozerskiy-Brüder)",  False),
+        ("~10%",  "Andere 1-Leader-2-Guard Kombi",                 False),
     ],
     ("woods", 5, 0): [
-        ("~65%",  "GOONS (3) + Smuggler (2er)",            True),
-        ("~35%",  "Shturman + Guards oder andere Kombi",  False),
+        ("~70%",  "GOONS (3) + Smuggler (2er)",                    True),
+        ("~30%",  "Andere 5er-Kombi ohne Guards",                  False),
+    ],
+    ("woods", 5, 2): [
+        ("~80%",  "Shturman (3) + Smuggler (2er)",                 False),
+        ("~20%",  "Andere Kombi",                                  False),
     ],
     ("woods", 6, 0): [
-        ("~80%",  "GOONS (3) + Smuggler (3er)",            True),
-        ("~20%",  "Shturman + Guards + Smuggler?",        False),
+        ("~80%",  "GOONS (3) + Smuggler (3er)",                    True),
+        ("~20%",  "Andere 6er-Kombi",                              False),
+    ],
+    ("woods", 6, 2): [
+        ("~80%",  "Shturman (3) + Smuggler (3er)",                 False),
+        ("~20%",  "Andere Kombi",                                  False),
+    ],
+    ("woods", 8, 2): [
+        ("~85%",  "GOONS (3) + Shturman (3) + Smuggler (2er)",     True),
+    ],
+    ("woods", 9, 2): [
+        ("~90%",  "GOONS (3) + Shturman (3) + Smuggler (3er)",     True),
+    ],
+
+    # ── LIGHTHOUSE ──────────────────────────────────────────────────────────
+    # Zryachiy(1+2G=3T/2S, IMMER 100%), Goons ~25%, Smuggler 100%
+    ("lighthouse", 2, 0): [
+        # Zryachiy immer -> n=2 mit bg=0 bedeutet Zryachiy(3T/2S) fehlt → ungewoehnlich
+        ("~100%", "Smuggler (2er-Gruppe)  — Zryachiy fehlt (Spawn-Bug?)", False),
+    ],
+    ("lighthouse", 3, 0): [
+        ("~60%",  "Smuggler (3er-Gruppe)  — Zryachiy fehlt (Spawn-Bug?)", False),
+        ("~40%",  "GOONS (3) + Smuggler (2er)",                    True),
+    ],
+    ("lighthouse", 3, 2): [
+        ("~85%",  "Zryachiy (1 Boss + 2 Guards = 3 Entities)",     False),
+        ("~15%",  "Andere 1-Leader-2-Guard Kombi",                 False),
+    ],
+    ("lighthouse", 5, 0): [
+        ("~70%",  "GOONS (3) + Smuggler (2er)",                    True),
+        ("~30%",  "Andere 5er-Kombi",                              False),
+    ],
+    ("lighthouse", 5, 2): [
+        ("~75%",  "Zryachiy (3) + Smuggler (2er)",                 False),
+        ("~25%",  "GOONS (3) + Zryachiy ohne Smuggler",            True),
+    ],
+    ("lighthouse", 6, 0): [
+        ("~80%",  "GOONS (3) + Smuggler (3er)",                    True),
+        ("~20%",  "Andere 6er-Kombi",                              False),
+    ],
+    ("lighthouse", 6, 2): [
+        ("~80%",  "Zryachiy (3) + Smuggler (3er)",                 False),
+        ("~20%",  "Andere Kombi",                                  False),
+    ],
+    ("lighthouse", 8, 2): [
+        ("~85%",  "GOONS (3) + Zryachiy (3) + Smuggler (2er)",     True),
+    ],
+    ("lighthouse", 9, 2): [
+        ("~90%",  "GOONS (3) + Zryachiy (3) + Smuggler (3er)",     True),
+    ],
+
+    # ── INTERCHANGE ─────────────────────────────────────────────────────────
+    # Killa(solo=1T/0S), Goons ~25%, Smuggler 100%
+    ("interchange", 1, 0): [
+        ("~70%",  "Killa (solo)", False),
+        ("~30%",  "Smuggler (1 Escort) allein — sehr selten", False),
+    ],
+    ("interchange", 2, 0): [
+        ("~60%",  "Smuggler (2er-Gruppe)", False),
+        ("~25%",  "Killa (solo) + 1 Smuggler-Escort", False),
+        ("~15%",  "Andere 2er-Kombi", False),
+    ],
+    ("interchange", 3, 0): [
+        ("~55%",  "Smuggler (3er-Gruppe)", False),
+        ("~25%",  "Killa (1) + Smuggler (2er)",                    False),
+        ("~20%",  "GOONS (3) + Smuggler (2er)  — ohne Killa",      True),
+    ],
+    ("interchange", 4, 0): [
+        ("~50%",  "Killa (1) + Smuggler (3er)",                    False),
+        ("~35%",  "GOONS (3) + Killa (1)",                         True),
+        ("~15%",  "Andere 4er-Kombi",                              False),
+    ],
+    ("interchange", 6, 0): [
+        ("~70%",  "GOONS (3) + Smuggler (3er)",                    True),
+        ("~20%",  "GOONS (3) + Killa (1) + Smuggler (2er)",        True),
+        ("~10%",  "Andere Kombi",                                  False),
+    ],
+
+    # ── RESERVE ─────────────────────────────────────────────────────────────
+    # Glukhar(1+6G=7T/6S), Event: ALLE Bosse 100% -> viele Spawns
+    ("reserve", 7, 6): [
+        ("~95%",  "Glukhar (1 Boss + 6 Guards)",                   False),
+    ],
+    ("reserve", 5, 4): [
+        ("~90%",  "Reshala (1 Boss + 4 Guards)  — Event-Spawn",    False),
+    ],
+
+    # ── STREETS ─────────────────────────────────────────────────────────────
+    # Kaban(Basmach+Gus+4 Followers+2-3 Snipers), Kollontay(1+4G=5T/4S), Goons ~15%, Smuggler 100%
+    ("streets", 2, 0): [
+        ("~100%", "Smuggler (2er-Gruppe)", False),
+    ],
+    ("streets", 3, 0): [
+        ("~65%",  "Smuggler (3er-Gruppe)", False),
+        ("~35%",  "GOONS (3) + Smuggler (2er)",                    True),
+    ],
+    ("streets", 5, 4): [
+        ("~90%",  "Kollontay (1 Boss + 4 Guards = MVD Officers)",  False),
+        ("~10%",  "Andere 1-Leader-4-Guard Kombi",                 False),
+    ],
+    ("streets", 6, 0): [
+        ("~80%",  "GOONS (3) + Smuggler (3er)",                    True),
+        ("~20%",  "Andere Kombi",                                  False),
+    ],
+
+    # ── GROUND ZERO ─────────────────────────────────────────────────────────
+    # Kollontay(1+4G=5T/4S), Goons ~15%, Smuggler 100%
+    ("groundzero", 2, 0): [
+        ("~100%", "Smuggler (2er-Gruppe)", False),
+    ],
+    ("groundzero", 3, 0): [
+        ("~65%",  "Smuggler (3er-Gruppe)", False),
+        ("~35%",  "GOONS (3) + Smuggler (2er)",                    True),
+    ],
+    ("groundzero", 5, 4): [
+        ("~90%",  "Kollontay (1 Boss + 4 Guards = MVD Officers)",  False),
+        ("~10%",  "Andere 1-Leader-4-Guard Kombi",                 False),
+    ],
+    ("groundzero", 6, 0): [
+        ("~80%",  "GOONS (3) + Smuggler (3er)",                    True),
+        ("~20%",  "Andere Kombi",                                  False),
+    ],
+
+    # ── FACTORY ─────────────────────────────────────────────────────────────
+    # Tagilla(solo=1T/0S), kein Smuggler, keine Goons
+    ("factory", 1, 0): [
+        ("~100%", "Tagilla (solo)", False),
     ],
 }
 
@@ -327,6 +462,34 @@ GOON_MAPS = {
 # (z.B. Shoreline: 2x AF an Tor-Türmen = immer +2)
 MAP_BACKGROUND_SPAWNS = {
     "shoreline": 2,   # 2x AF (Armed Forces) an GateTowerRight + GateTowerLeft
+}
+
+# Boss-Daten: name -> (guards, tryspawn_total, supports, maps, spawn_base_pct)
+# tryspawn_total = 1 (leader) + guards (Mindestwert bei variabler Guard-Zahl)
+# spawn_base_pct = serverseitiger Basiswert laut Wiki/tarkov.dev (~20-35%)
+# Quelle: Spieler-Kalibrierung + tarkov.dev + Wiki (verifiziert März 2026)
+BOSS_DATA = {
+    # name:       guards  ts  sup  maps                            base%
+    "reshala":   (4,  5,  4, ["customs"],                          28),
+    # Shturman: 2 Guards (Svetloozerskiy-Brüder) — verifiziert
+    "shturman":  (2,  3,  2, ["woods"],                            28),
+    "tagilla":   (0,  1,  0, ["factory"],                          28),
+    "killa":     (0,  1,  0, ["interchange"],                      28),
+    "sanitar":   (2,  3,  2, ["shoreline"],                        28),
+    "glukhar":   (6,  7,  6, ["reserve"],                          28),
+    "zryachiy":  (2,  3,  2, ["lighthouse"],                      100),  # IMMER 100% (Insel)
+    # Kaban: 4-6 aktive Guards (Basmach, Gus u.a.) + 2 stationäre Scharfschützen auf Dächern
+    "kaban":     (-1,-1, -1, ["streets"],                          22),
+    # Kollontay: 4 Guards (MVD Officers) — verifiziert
+    "kollontay": (4,  5,  4, ["streets", "groundzero"],            22),
+    "goons":     (0,  3,  0, ["shoreline","woods","lighthouse",
+                               "customs","interchange","streets",
+                               "groundzero"],                       17),  # rotierend ~15-20%
+    "partizan":  (0,  1,  0, ["customs","woods","shoreline"],      -1),  # karma-abhängig
+    "cultists":  (-1,-1, -1, ["woods","shoreline","reserve"],      10),  # nur nachts ~10%
+    "smuggler":  (0,  3,  0, ["customs","woods","lighthouse",
+                               "shoreline","interchange","streets",
+                               "groundzero"],                      100),  # IMMER (2-3 Entities)
 }
 
 
@@ -539,6 +702,19 @@ class GoonTracker:
                 print(row(f"  {sup_line}"))
                 self._play_other()
                 return
+            elif s == 2:
+                hint = {
+                    "shoreline":  "Sanitar (1 Boss + 2 Guards)",
+                    "woods":      "Shturman (1 Boss + 2 Guards = Svetloozerskiy-Brüder)",
+                    "lighthouse": "Zryachiy (1 Boss + 2 Guards)",
+                }.get(self.map_name or "", f"1 Leader + 2 Guards")
+                print(row(f"ℹ   3 BOSS-SPAWNS  –  {hint}"))
+                print(f"╠{sep}╣")
+                if bg_note:
+                    print(row(f"  {bg_note}"))
+                print(row(f"  {sup_line}"))
+                self._play_other()
+                return
             else:
                 print(row(f"⚠   3 BOSS-SPAWNS  –  {leaders} Leader + {s} Guard(s)"))
                 print(f"╠{sep}╣")
@@ -564,7 +740,9 @@ class GoonTracker:
                     "shoreline":  f"Sanitar ({leaders} Boss + {s} Guards)",
                     "customs":    f"Boss mit Guards ({leaders} Leader + {s} Guards)",
                     "woods":      f"Shturman ({leaders} Boss + {s} Guards)",
-                    "reserve":    f"Boss + {s} Guards",
+                    "reserve":    f"Glukhar ({leaders} Boss + {s} Guards)",
+                    "streets":    f"Kollontay oder anderer Boss ({leaders} Leader + {s} Guards)",
+                    "groundzero": f"Kollontay oder anderer Boss ({leaders} Leader + {s} Guards)",
                 }.get(self.map_name or "", f"{leaders} Leader + {s} Guards")
                 print(row(f"ℹ   4 BOSS-SPAWNS  –  {hint}"))
                 print(row(f"  Formel: {n} TrySpawn − {s} Supports = {leaders} Leader, {s} Guards"))
@@ -585,11 +763,12 @@ class GoonTracker:
                 print(row("  Kein Wachen-Marker — zwei unabhaengige Gruppen"))
                 self._play_three()
             elif s == 4:
-                # Bestaetigt: 1 Leader + 4 Guards (Reshala-Muster)
+                # Bestaetigt: 1 Leader + 4 Guards
                 boss_hint = {
-                    "customs":  "RESHALA (1 Boss + 4 Guards)  — bestaetigt",
-                    "reserve":  "GLUHAR (1 Boss + 4 Guards)",
-                    "woods":    "SHTURMAN (1 Boss + 4 Guards)?",
+                    "customs":     "RESHALA (1 Boss + 4 Guards = Zawodskoy-Brüder)  — bestaetigt",
+                    "reserve":     "GLUKHAR (1 Boss + 4 Guards)",
+                    "streets":     "KOLLONTAY (1 Boss + 4 Guards = MVD Officers)",
+                    "groundzero":  "KOLLONTAY (1 Boss + 4 Guards = MVD Officers)",
                 }.get(self.map_name or "", f"1 Boss + 4 Guards ({leaders} Leader berechnet)")
                 print(row(f"ℹ   5 BOSS-SPAWNS  –  {boss_hint}"))
                 print(row(f"  {sup_line}"))
@@ -599,7 +778,7 @@ class GoonTracker:
                     "shoreline":  "Smuggler(3) + Boss+Wachen?  ODER  Sanitar(4)+1",
                     "lighthouse": "Smuggler(2)+Goons(3)  ODER  Goons(3)+Zryachiy(2)",
                     "customs":    f"Reshala+4G  ODER  Smuggler(2)+Goons(3)  [{leaders} Leader, {s} Guards]",
-                    "woods":      "Smuggler(2)+Goons(3)  ODER  Shturman+4?",
+                    "woods":      f"Smuggler(2)+Goons(3)  ODER  Shturman(3)+Smuggler(2)  [{leaders} Leader, {s} Guards]",
                 }.get(self.map_name or "", f"Multi-Boss: {leaders} Leader, {s} Guards")
                 print(row("ℹ   5 BOSS-SPAWNS"))
                 print(row(f"  Wahrscheinlich: {combo}"))
@@ -630,19 +809,28 @@ class GoonTracker:
                 self._play_three()
 
         elif n == 7:
-            print(row("⚠ ⚠   7 BOSS-SPAWNS  –  GOONS + BOSS co-spawn!"))
-            print(f"╠{sep}╣")
-            if bg_note:
-                print(row(f"  {bg_note}"))
-            combo = {
-                "shoreline":  "GOONS (3) + SANITAR + 3 Wachen (4)",
-                "customs":    "GOONS (3) + RESHALA + 3 Wachen (4)",
-                "woods":      "GOONS (3) + SHTURMAN + 3 Wachen (4)",
-                "lighthouse": "GOONS (3) + Boss + Wachen (4)",
-            }.get(self.map_name or "", "Goons (3) + Boss + 3 Wachen (4)")
-            print(row(f"  {combo}"))
-            print(row(f"  {sup_line}"))
-            self._play_three()
+            leaders = n - s
+            if s == 6:
+                print(row("ℹ   7 BOSS-SPAWNS  –  GLUKHAR (1 Boss + 6 Guards)"))
+                print(f"╠{sep}╣")
+                if bg_note:
+                    print(row(f"  {bg_note}"))
+                print(row(f"  {sup_line}"))
+                self._play_other()
+            else:
+                print(row("⚠ ⚠   7 BOSS-SPAWNS  –  GOONS + BOSS co-spawn!"))
+                print(f"╠{sep}╣")
+                if bg_note:
+                    print(row(f"  {bg_note}"))
+                combo = {
+                    "shoreline":  "GOONS (3) + SANITAR (1+2G) + Smuggler (1)?",
+                    "customs":    "GOONS (3) + RESHALA (1+4G)  ← Formel: 3 Leader + 4 Guards",
+                    "woods":      "GOONS (3) + SHTURMAN (1+2G) + Smuggler (1)?",
+                    "lighthouse": "GOONS (3) + ZRYACHIY (1+2G) + Smuggler (1)?",
+                }.get(self.map_name or "", f"{leaders} Leader + {s} Guards")
+                print(row(f"  {combo}"))
+                print(row(f"  {sup_line}"))
+                self._play_three()
 
         elif n >= 8:
             print(row(f"⚠   {n} BOSS-SPAWNS  –  VIELE BOSSE CO-SPAWN!"))
@@ -789,7 +977,7 @@ def print_header(player_log: Path):
         return ("..." + s[-(W - 11):]) if len(s) > W - 8 else s
 
     print(f"╔{sep}╗")
-    print(row("EFT  LIVE  GOON  TRACKER   v4.2"))
+    print(row("EFT  LIVE  GOON  TRACKER   v4.3"))
     print(row("Knight · Big Pipe · Birdeye  –  PvE Edition"))
     print(f"╠{sep}╣")
     print(row(f"Log:  {shorten(player_log)}"))
@@ -803,7 +991,7 @@ def print_header(player_log: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="EFT Live Goon Tracker v4.2")
+    parser = argparse.ArgumentParser(description="EFT Live Goon Tracker v4.3")
     parser.add_argument("--debug", action="store_true",
                         help="Zeigt erkannte Signale in Echtzeit")
     parser.add_argument("--full",  action="store_true",
