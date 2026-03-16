@@ -105,7 +105,12 @@ def do_update(tag: str, download_url: str):
         encoding="utf-8",
     )
     print(f"[UPDATE] Update wird installiert – Tool startet neu ...")
-    os.startfile(bat)
+    import subprocess
+    subprocess.Popen(
+        ["cmd", "/c", str(bat)],
+        creationflags=subprocess.CREATE_NEW_CONSOLE,
+        close_fds=True,
+    )
     sys.exit(0)
 
 
