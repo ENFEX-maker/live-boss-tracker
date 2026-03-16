@@ -158,13 +158,20 @@ _PROB: dict = {
         ("100%",  "Partizan + Smuggler (2er)  ← aus Logs bestaetigt", False),
     ],
     ("customs", 4, 0): [
-        ("~70%",  "Smuggler (3er) + Partizan (solo, kein Support)", False),
-        ("~20%",  "Smuggler (2er) + Goons (2?)  oder andere Kombi", False),
-        ("~10%",  "Reshala mit weniger Guards als normal", False),
+        # S=0 → 4 unabhaengige Leader, keine Guards → kein Reshala moeglich
+        ("~65%",  "Smuggler (3er) + Partizan (4 indep. Entities)", False),
+        ("~30%",  "GOONS (3) + Partizan (4 indep. Entities)",      True),
+        ("~5%",   "Andere 4er-Kombi ohne Guard-Struktur",          False),
     ],
     ("customs", 4, 1): [
-        ("~80%",  "Partizan + Smuggler (3er)", False),
-        ("~20%",  "Andere Kombi mit 1 Guard", False),
+        # S=1 → 3 Leader + 1 Guard
+        ("~75%",  "Smuggler (3er) + Partizan (1 Guard-Marker)",    False),
+        ("~25%",  "Andere Kombi mit 1 Guard",                      False),
+    ],
+    ("customs", 4, 3): [
+        # S=3 → 1 Leader + 3 Guards → unbekannter Guard-Boss auf Customs
+        ("~80%",  "Boss + 3 Guards (kein Reshala – der hat 4)",    False),
+        ("~20%",  "Andere 1-Leader-3-Guard Kombi",                 False),
     ],
     ("customs", 5, 0): [
         ("~75%",  "GOONS (3) + Smuggler (2er)",            True),
@@ -543,22 +550,24 @@ class GoonTracker:
         elif n == 4:
             leaders = n - s
             if s == 0:
-                boss_hint = {
-                    "customs":    "Smuggler (3er) + Partizan  oder  Reshala-Variante",
-                    "shoreline":  "Sanitar (1+3G)  oder  Smuggler(2) + weitere",
-                    "woods":      "Shturman + Guards  oder  Smuggler-Kombi",
-                    "reserve":    "Gluhar oder Boss + 3 Guards",
-                    "streets":    "Boss + 3 Guards",
-                    "groundzero": "Boss + 3 Guards",
-                }.get(self.map_name or "", "Boss + 3 Wachen  oder  Smuggler-Kombi")
-                print(row(f"ℹ   4 BOSS-SPAWNS  –  {boss_hint}"))
+                # 4 unabhaengige Entities — kein Guard-Boss
+                hint = {
+                    "customs":   "Smuggler (3er) + Partizan  oder  GOONS + Partizan",
+                    "shoreline": "Smuggler (3er) + 1 weiterer  oder  Smuggler(2) + 2",
+                    "woods":     "Smuggler (3er) + 1 weiterer",
+                }.get(self.map_name or "", "4 unabhaengige Boss-Entities (kein Guard-Boss)")
+                print(row(f"ℹ   4 BOSS-SPAWNS  –  {hint}"))
+                print(row(f"  Formel: {n} TrySpawn − {s} Supports = {leaders} Leader, 0 Guards"))
             else:
-                boss_hint = {
-                    "shoreline":  "Sanitar (1 Boss + 3 Guards)  ← Wachen bestaetigt",
-                    "customs":    "Reshala oder Boss + Guards  ← Wachen bestaetigt",
-                    "woods":      "Shturman + Guards  ← Wachen bestaetigt",
-                }.get(self.map_name or "", f"{leaders} Leader + {s} Guards  ← bestaetigt")
-                print(row(f"ℹ   4 BOSS-SPAWNS  –  {boss_hint}"))
+                # Guard-Struktur erkannt
+                hint = {
+                    "shoreline":  f"Sanitar ({leaders} Boss + {s} Guards)",
+                    "customs":    f"Boss mit Guards ({leaders} Leader + {s} Guards)",
+                    "woods":      f"Shturman ({leaders} Boss + {s} Guards)",
+                    "reserve":    f"Boss + {s} Guards",
+                }.get(self.map_name or "", f"{leaders} Leader + {s} Guards")
+                print(row(f"ℹ   4 BOSS-SPAWNS  –  {hint}"))
+                print(row(f"  Formel: {n} TrySpawn − {s} Supports = {leaders} Leader, {s} Guards"))
             print(f"╠{sep}╣")
             if bg_note:
                 print(row(f"  {bg_note}"))
