@@ -2,30 +2,81 @@ name: Build & Release
 
 on:
   push:
-    tags:
-      - "v*"
+    branches: [main]
 
 jobs:
-  build:
+  release:
+    # Bot-eigene Version-Bump-Commits ueberspringen
+    if: "!contains(github.event.head_commit.message, '[skip ci]')"
     runs-on: windows-latest
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Naechste Version berechnen & goon_tracker.py aktualisieren
+        id: ver
+        shell: pwsh
+        run: |
+          # Major aus aktuellem Stand der Quelldatei lesen
+          $content  = Get-Content goon_tracker.py -Raw -Encoding UTF8
+          $major    = if ($content -match 'VERSION\s*=\s*"(\d+)\.(\d+)"') { $Matches[1] } else { "4" }
+          $filMinor = if ($content -match 'VERSION\s*=\s*"(\d+)\.(\d+)"') { [int]$Matches[2] } else { 0 }
+
+          # Hoechste vorhandene Minor-Version fuer diesen Major aus den Git-Tags ermitteln
+          $tags      = git tag --sort=-v:refname | Where-Object { $_ -match "^v$major\.\d+$" }
+          $tagMinor  = if ($tags) { ($tags | Select-Object -First 1) -replace "v$major\.", "" | ForEach-Object { [int]$_ } } else { -1 }
+
+          # Naechste Minor = max(Datei, letzter Tag) + 1
+          $nextMinor = [Math]::Max($filMinor, $tagMinor) + 1
+          $version   = "$major.$nextMinor"
+          $tag       = "v$version"
+
+          # VERSION in Quelldatei aktualisieren
+          $newContent = $content -replace '(?m)^VERSION\s*=\s*"[^"]*"', "VERSION       = `"$version`""
+          Set-Content goon_tracker.py -Value $newContent -Encoding UTF8
+
+          # Auch Header-Kommentar + argparse-Beschreibung im selben Schritt updaten
+          $newContent2 = (Get-Content goon_tracker.py -Raw -Encoding UTF8) `
+            -replace 'EFT Live Goon Tracker v[\d.]+', "EFT Live Goon Tracker v$version" `
+            -replace 'EFT  LIVE  GOON  TRACKER   v[\d.]+', "EFT  LIVE  GOON  TRACKER   v$version"
+          Set-Content goon_tracker.py -Value $newContent2 -Encoding UTF8
+
+          # Outputs fuer nachfolgende Steps
+          "tag=$tag"         | Out-File $env:GITHUB_OUTPUT -Append -Encoding UTF8
+          "version=$version" | Out-File $env:GITHUB_OUTPUT -Append -Encoding UTF8
+          Write-Host "Neue Version: $version  (Tag: $tag)"
+
+      - name: Version-Bump committen & taggen
+        shell: bash
+        run: |
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add goon_tracker.py
+          git diff --cached --quiet || git commit -m "chore: release ${{ steps.ver.outputs.tag }} [skip ci]"
+          git tag ${{ steps.ver.outputs.tag }}
+          git push origin main --follow-tags
 
       - name: Python einrichten
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
 
-      - name: Abhaengigkeiten installieren
+      - name: PyInstaller installieren
         run: pip install pyinstaller
 
       - name: EXE bauen
         run: python -m PyInstaller --onefile --console --name "GoonTracker" goon_tracker.py
 
-      - name: Release erstellen und EXE hochladen
+      - name: GitHub Release erstellen & EXE hochladen
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ steps.ver.outputs.tag }}
+          name: "GoonTracker ${{ steps.ver.outputs.tag }}"
           files: dist/GoonTracker.exe
           generate_release_notes: true
