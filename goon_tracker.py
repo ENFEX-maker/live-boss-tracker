@@ -618,6 +618,10 @@ class GoonTracker:
         # Hintergrund-Spawns abziehen (z.B. Shoreline 2x AF)
         bg = MAP_BACKGROUND_SPAWNS.get(self.map_name or "", 0)
         n  = raw_n - bg   # "echte" Boss-Spawns ohne Map-fixe Hintergrund-Bosse
+        # Wenn n negativ: AF-Spawns nicht im Erkennungsfenster → bg ignorieren
+        if n < 0:
+            bg = 0
+            n  = raw_n
 
         W   = 66
         sep = "═" * W
